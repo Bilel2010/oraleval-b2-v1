@@ -284,17 +284,19 @@ export default function EvaluationsPage() {
         ["CRITÈRES", "NOTE", "MAX", "REMARQUES"]
       ];
 
-      gridTemplate.forEach(section => {
-        data.push([section.title.toUpperCase(), "", "", ""]);
-        section.criteria.forEach(crit => {
-          data.push([
-            crit.name,
-            currentEval.scores[crit.id] || 0,
-            crit.maxScore,
-            currentEval.remarks[crit.id] || ""
-          ]);
-        });
-      });
+     gridTemplate.forEach(section => {
+  data.push([section.title.toUpperCase(), "", "", ""]);
+
+  section.criteria.forEach(crit => {
+    data.push([
+      crit.name,
+      String(currentEval.scores[crit.id] || 0),
+      String(crit.maxScore),
+      currentEval.remarks[crit.id] || ""
+    ]);
+  });
+});
+      
 
       data.push([""]);
       data.push(["NOTE FINALE", convertedScore20.toFixed(1), "/20", ""]);
