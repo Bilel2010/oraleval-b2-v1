@@ -1,16 +1,48 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
 import { Topnav } from "@/components/Topnav";
 import { X } from "lucide-react";
+import { useAuth } from "@/lib/authStorage";
 
 export default function AuthenticatedLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
+    }
+    
+    // Simple role protection: if student tries to access teacher pages
+    if (!loading && user && user.role === "student" && !pathname.startsWith("/student")) {
+      router.push("/student");
+    }
+    
+    // If teacher tries to access student page
+    if (!loading && user && user.role === "teacher" && pathname === "/student") {
+      router.push("/dashboard");
+    }
+  }, [user, loading, router, pathname]);
+
+  if (loading || !user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+          <p className="text-sm font-medium text-slate-500">Chargement de votre session...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full">

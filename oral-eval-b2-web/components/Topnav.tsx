@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { Menu, Bell, User, ChevronDown, Settings, LogOut, UserCircle } from "lucide-react";
 import Link from "next/link";
 import { useProfile } from "@/lib/profileStorage";
+import { logoutUser } from "@/lib/authStorage";
 
 interface TopnavProps {
   onMenuClick: () => void;
@@ -13,6 +14,11 @@ export function Topnav({ onMenuClick }: TopnavProps) {
   const { profile } = useProfile();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const handleLogout = () => {
+    setDropdownOpen(false);
+    logoutUser();
+  };
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -114,14 +120,13 @@ export function Topnav({ onMenuClick }: TopnavProps) {
                 </div>
 
                 <div className="border-t border-slate-100 py-1">
-                  <Link
-                    href="/login"
-                    onClick={() => setDropdownOpen(false)}
-                    className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors text-left"
                   >
                     <LogOut className="h-4 w-4" />
                     Déconnexion
-                  </Link>
+                  </button>
                 </div>
               </div>
             )}

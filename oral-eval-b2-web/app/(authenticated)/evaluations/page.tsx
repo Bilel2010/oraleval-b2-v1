@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { 
   Save, User, BookOpen, AlertCircle, FileText, Download, FileSpreadsheet, 
   Check, ArrowLeft, Paperclip, MessageSquare, Plus, Trash2, Edit3 
@@ -230,6 +230,181 @@ export default function EvaluationsPage() {
 
     return { total50: t50, currentTotal: currTotal, dynamicMax: dynMax, chartData: radarItems };
   }, [gridTemplate, currentEval.scores]);
+
+  // --- Report Generation Logic ---
+  const [isExporting, setIsExporting] = useState<string | null>(null);
+  const synthesisRef = useRef<HTMLDivElement>(null);
+
+  const handleDownloadPDF = async () => {
+    if (!synthesisRef.current) return;
+    setIsExporting("pdf");
+    try {
+      const { jsPDF } = await import("jspdf");
+      const html2canvas = (await import("html2canvas")).default;
+      
+      const canvas = await html2canvas(synthesisRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#ffffff"
+      });
+      
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("p", "mm", "a4");
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      
+      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`Evaluation_${safeStudent.name.replace(/\s+/g, "_")}_${new Date().toLocaleDateString("fr-FR").replace(/\//g, "-")}.pdf`);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      console.error("PDF Export failed", err);
+    } finally {
+      setIsExporting(null);
+    }
+  };
+
+  const handleDownloadXLSX = async () => {
+    setIsExporting("xlsx");
+    try {
+      const { utils, writeFile } = await import("xlsx");
+      
+      const data = [
+        ["RAPPORT D'ÉVALUATION DELF B2"],
+        [""],
+        ["Candidat", safeStudent.name],
+        ["ID", safeStudent.id],
+        ["Classe", safeStudent.className],
+        ["Sujet", safeStudent.topic || ""],
+        ["Date", new Date().toLocaleDateString("fr-FR")],
+        ["Évaluateur", profile.fullName || "Professeur"],
+        [""],
+        ["CRITÈRES", "NOTE", "MAX", "REMARQUES"]
+      ];
+
+      gridTemplate.forEach(section => {
+        data.push([section.title.toUpperCase(), "", "", ""]);
+        section.criteria.forEach(crit => {
+          data.push([
+            crit.name,
+            currentEval.scores[crit.id] || 0,
+            crit.maxScore,
+            currentEval.remarks[crit.id] || ""
+          ]);
+        });
+      });
+
+      data.push([""]);
+      data.push(["NOTE FINALE", convertedScore20.toFixed(1), "/20", ""]);
+      data.push(["Appréciation globale", currentEval.globalRemark || "", "", ""]);
+
+      const ws = utils.aoa_to_sheet(data);
+      const wb = utils.book_new();
+      utils.book_append_sheet(wb, ws, "Evaluation");
+      writeFile(wb, `Evaluation_${safeStudent.name.replace(/\s+/g, "_")}.xlsx`);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      console.error("XLSX Export failed", err);
+    } finally {
+      setIsExporting(null);
+    }
+  };
+
+  const handleDownloadCSV = () => {
+    setIsExporting("csv");
+    try {
+      let csv = "Critère,Note,Max,Remarque\n";
+      gridTemplate.forEach(section => {
+        section.criteria.forEach(crit => {
+          csv += `"${crit.name}",${currentEval.scores[crit.id] || 0},${crit.maxScore},"${(currentEval.remarks[crit.id] || "").replace(/"/g, '""')}"\n`;
+        });
+      });
+      csv += `\nNOTE FINALE,${convertedScore20.toFixed(1)},/20,\n`;
+      csv += `Appréciation globale,"${(currentEval.globalRemark || "").replace(/"/g, '""')}"`;
+
+      const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", `Evaluation_${safeStudent.name.replace(/\s+/g, "_")}.csv`);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } finally {
+      setIsExporting(null);
+    }
+  };
+
+  const handleDownloadDOCX = async () => {
+    setIsExporting("docx");
+    try {
+      const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, AlignmentType } = await import("docx");
+      const { saveAs } = (await import("file-saver")).default || { saveAs: (blob: any, name: any) => {
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = name;
+        link.click();
+      }};
+
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: [
+            new Paragraph({ text: "RAPPORT D'ÉVALUATION DELF B2", heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER }),
+            new Paragraph({ text: `Candidat : ${safeStudent.name}`, spacing: { before: 400 } }),
+            new Paragraph({ text: `Classe : ${safeStudent.className}` }),
+            new Paragraph({ text: `Date : ${new Date().toLocaleDateString("fr-FR")}` }),
+            new Paragraph({ text: `Évaluateur : ${profile.fullName || "Professeur"}`, spacing: { after: 400 } }),
+            
+            new Paragraph({ text: "RÉSULTATS PAR CRITÈRE", heading: HeadingLevel.HEADING_2, spacing: { before: 400, after: 200 } }),
+            
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows: [
+                new TableRow({
+                  children: [
+                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Critère", bold: true })] })] }),
+                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Note", bold: true })] })] }),
+                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Max", bold: true })] })] }),
+                  ],
+                }),
+                ...gridTemplate.flatMap(section => 
+                  section.criteria.map(crit => 
+                    new TableRow({
+                      children: [
+                        new TableCell({ children: [new Paragraph(crit.name)] }),
+                        new TableCell({ children: [new Paragraph(String(currentEval.scores[crit.id] || 0))] }),
+                        new TableCell({ children: [new Paragraph(String(crit.maxScore))] }),
+                      ],
+                    })
+                  )
+                ),
+              ],
+            }),
+
+            new Paragraph({ text: `\nNOTE FINALE : ${convertedScore20.toFixed(1)} / 20`, heading: HeadingLevel.HEADING_2, spacing: { before: 400 } }),
+            new Paragraph({ text: "Appréciation globale :", bold: true, spacing: { before: 200 } }),
+            new Paragraph({ text: currentEval.globalRemark || "Aucune appréciation.", italic: true }),
+          ],
+        }],
+      });
+
+      const blob = await Packer.toBlob(doc);
+      saveAs(blob, `Evaluation_${safeStudent.name.replace(/\s+/g, "_")}.docx`);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      console.error("DOCX Export failed", err);
+    } finally {
+      setIsExporting(null);
+    }
+  };
 
   const convertedScore20 = dynamicMax > 0 ? (currentTotal / dynamicMax) * 20 : 0;
 
@@ -678,22 +853,58 @@ export default function EvaluationsPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <button className="inline-flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 transition-colors">
-            <FileText className="h-4 w-4" /> PDF
+          <button
+            onClick={handleDownloadPDF}
+            disabled={isExporting !== null}
+            className="inline-flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50"
+          >
+            {isExporting === "pdf" ? (
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-700 border-t-transparent" />
+            ) : (
+              <FileText className="h-4 w-4" />
+            )}
+            PDF
           </button>
-          <button className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100 transition-colors">
-            <FileText className="h-4 w-4" /> DOCX
+          <button
+            onClick={handleDownloadDOCX}
+            disabled={isExporting !== null}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50"
+          >
+            {isExporting === "docx" ? (
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-700 border-t-transparent" />
+            ) : (
+              <FileText className="h-4 w-4" />
+            )}
+            DOCX
           </button>
-          <button className="inline-flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors">
-            <FileSpreadsheet className="h-4 w-4" /> XLSX
+          <button
+            onClick={handleDownloadXLSX}
+            disabled={isExporting !== null}
+            className="inline-flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-50"
+          >
+            {isExporting === "xlsx" ? (
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-700 border-t-transparent" />
+            ) : (
+              <FileSpreadsheet className="h-4 w-4" />
+            )}
+            XLSX
           </button>
-          <button className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 transition-colors">
-            <Download className="h-4 w-4" /> CSV
+          <button
+            onClick={handleDownloadCSV}
+            disabled={isExporting !== null}
+            className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 transition-colors disabled:opacity-50"
+          >
+            {isExporting === "csv" ? (
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-700 border-t-transparent" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            CSV
           </button>
         </div>
       </div>
 
-      <div className="bg-white shadow-lg ring-1 ring-slate-200 rounded-lg overflow-hidden flex flex-col mx-auto border-t-8 border-t-blue-600">
+      <div ref={synthesisRef} className="bg-white shadow-lg ring-1 ring-slate-200 rounded-lg overflow-hidden flex flex-col mx-auto border-t-8 border-t-blue-600">
         <div className="p-10 border-b border-slate-100 flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-bold text-slate-900">Rapport d'évaluation DELF B2</h1>

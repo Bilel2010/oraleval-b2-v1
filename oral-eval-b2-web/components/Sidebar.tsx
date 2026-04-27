@@ -10,15 +10,28 @@ import {
   LogOut 
 } from "lucide-react";
 
-const navigation = [
+import { useAuth, logoutUser } from "@/lib/authStorage";
+
+const teacherNavigation = [
   { name: "Tableau de bord", href: "/dashboard", icon: LayoutDashboard },
   { name: "Classes", href: "/classes", icon: Users },
   { name: "Étudiants", href: "/students", icon: GraduationCap },
   { name: "Évaluations", href: "/evaluations", icon: ClipboardCheck },
 ];
 
+const studentNavigation = [
+  { name: "Espace Étudiant", href: "/student", icon: LayoutDashboard },
+];
+
 export function Sidebar() {
   const pathname = usePathname();
+  const { user } = useAuth();
+
+  const handleLogout = () => {
+    logoutUser();
+  };
+
+  const navigation = user?.role === "student" ? studentNavigation : teacherNavigation;
 
   return (
     <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r border-slate-200 bg-white px-6 pb-4 pt-8">
@@ -59,13 +72,13 @@ export function Sidebar() {
             </ul>
           </li>
           <li className="mt-auto">
-            <Link
-              href="/login"
-              className="group -mx-2 flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 text-slate-700 hover:bg-slate-50 hover:text-blue-600"
+            <button
+              onClick={handleLogout}
+              className="group -mx-2 flex w-full gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 text-slate-700 hover:bg-slate-50 hover:text-blue-600 text-left"
             >
               <LogOut className="h-5 w-5 shrink-0 text-slate-400 group-hover:text-blue-600" aria-hidden="true" />
               Déconnexion
-            </Link>
+            </button>
           </li>
         </ul>
       </nav>

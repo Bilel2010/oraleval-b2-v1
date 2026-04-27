@@ -30,17 +30,27 @@ export const DEFAULT_PROFILE: TeacherProfile = {
   avatarBase64: "",
 };
 
+import { getCurrentUser } from "./authStorage";
+
 export function getProfile(): TeacherProfile {
   if (typeof window === "undefined") return DEFAULT_PROFILE;
 
+  // Prefer data from the current authenticated user session
+  const currentUser = getCurrentUser();
+  
   try {
     const data = localStorage.getItem(PROFILE_KEY);
+    const localProfile = data ? JSON.parse(data) : {};
 
-    if (!data) return DEFAULT_PROFILE;
-
+    // Merge: DEFAULT < Local Storage < Current User session
     return {
       ...DEFAULT_PROFILE,
-      ...JSON.parse(data),
+      ...localProfile,
+      fullName: currentUser?.fullName || localProfile.fullName || DEFAULT_PROFILE.fullName,
+      email: currentUser?.email || localProfile.email || DEFAULT_PROFILE.email,
+      institution: currentUser?.institution || localProfile.institution || DEFAULT_PROFILE.institution,
+      department: currentUser?.department || localProfile.department || DEFAULT_PROFILE.department,
+      specialty: currentUser?.specialty || localProfile.specialty || DEFAULT_PROFILE.specialty,
     };
   } catch {
     return DEFAULT_PROFILE;
